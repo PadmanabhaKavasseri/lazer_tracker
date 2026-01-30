@@ -1,0 +1,1 @@
+gcc -o metadata_processor md_proc.c `pkg-config --cflags --libs gstreamer-1.0 gstreamer-app-1.0`
