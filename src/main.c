@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
     gst_init(&argc, &argv);
     
     // Create pipeline
-    pipeline = gst_parse_launch(
+    GstElement * CSI_pipeline = gst_parse_launch(
         "qtimlvconverter name=preproc "
         "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite "
         "qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings=\"{\\\"confidence\\\": 70.0}\" "
@@ -25,6 +25,18 @@ int main(int argc, char *argv[]) {
         "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
         "split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.",
         NULL);
+
+    pipeline = gst_parse_launch(
+        "qtimlvconverter name=preproc "
+        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite "
+        "qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings=\"{\\\"confidence\\\": 70.0}\" "
+        "v4l2src device=/dev/video0 ! video/x-raw,format=NV12,width=1280,height=720,framerate=30/1 ! queue ! tee name=split "
+        "split. ! qtimetamux name=metamux ! tee name=meta_tee "
+        "meta_tee. ! queue ! qtivoverlay ! autovideosink "
+        "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
+        "split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.",
+        NULL);
+
     
     if (!pipeline) {
         g_printerr("Failed to create pipeline\n");
