@@ -55,6 +55,7 @@ DetectionResult* parse_gst_structure(GstStructure *structure);
 void parse_detection_structure(GstStructure *det_structure, ObjectDetection *detection);
 void print_detection_result(const DetectionResult *result);
 void free_detection_result(DetectionResult *result);
+int map_to_servo_angle(float normalized_coord, int image_dimension);
 
 // Utility functions
 void convert_to_pixel_coordinates(const ObjectDetection *detection, 

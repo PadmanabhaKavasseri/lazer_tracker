@@ -2,11 +2,35 @@
 
 Real-time object detection metadata parser for GStreamer pipelines with `qtimlmetaextractor`.
 
-## Build
+## Build GST Appsink
 
 ```bash
 make
 ```
+
+## Compile Arduino Code
+```
+cd /home/ubuntu/lazer_tracker/ard
+arduino-cli compile --fqbn arduino:avr:uno servo_controller.ino
+```
+
+## Flash Arduino Code
+```
+arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno servo_controller.ino
+
+```
+
+## Arduino Test Commands
+```
+/ → stty -F /dev/ttyACM0 9600 raw -echo
+/ → printf "45,45\n" > /dev/ttyACM0
+/ → printf "135,135\n" > /dev/ttyACM0
+/ → printf "90,90\n" > /dev/ttyACM0
+/ → printf "60,120\n" > /dev/ttyACM0
+
+cat /dev/ttyACM0
+```
+
 
 ## Check Devices USB
 ```
@@ -23,6 +47,7 @@ gst-launch-1.0 v4l2src device=/dev/video0 ! "video/x-raw,format=NV12,width=1280,
 
 ```bash
 ./bin/metadata_processor
+
 ```
 
 

@@ -1,4 +1,5 @@
 #include "metadata_parser.h"
+#include "motor_commands.h"
 #include <gst/app/gstappsink.h>
 #include <stdio.h>
 
@@ -6,11 +7,16 @@
 static GstFlowReturn on_new_metadata_sample(GstElement *sink, gpointer user_data);
 void process_metadata(char *metadata_text, size_t size);
 
+
 int main(int argc, char *argv[]) {
     GstElement *pipeline;
     GstElement *metadata_sink;
     GMainLoop *loop;
-    
+
+    if (init_arduino_serial() != 0) {
+        return -1;
+    }
+            
     // Initialize GStreamer
     gst_init(&argc, &argv);
     
@@ -63,6 +69,7 @@ int main(int argc, char *argv[]) {
     gst_element_set_state(pipeline, GST_STATE_NULL);
     gst_object_unref(pipeline);
     g_main_loop_unref(loop);
+    cleanup_arduino_serial();
     
     return 0;
 }
@@ -99,14 +106,21 @@ void process_metadata(char *metadata_text, size_t size) {
             for (guint i = 0; i < result->num_detections; i++) {
                 ObjectDetection *det = &result->detections[i];
                 
-                if (is_high_confidence_detection(det, 80.0) && 
-                    strcmp(det->class_name, "person") == 0) {
+                // Filter for stop signs with high confidence
+                if (is_high_confidence_detection(det, 70.0) && 
+                    strcmp(det->class_name, "stop.sign") == 0) {
                     
-                    guint x1, y1, x2, y2;
-                    convert_to_pixel_coordinates(det, 1920, 1080, &x1, &y1, &x2, &y2);
+                    // Calculate center coordinates
+                    float center_x = det->x + (det->width / 2.0);
+                    float center_y = det->y + (det->height / 2.0);
                     
-                    printf("High confidence person at pixels: (%u,%u) to (%u,%u)\n",
-                           x1, y1, x2, y2);
+                    // Map to servo angles
+                    int pan_angle = map_to_servo_angle(center_x, 1280);
+                    int tilt_angle = map_to_servo_angle(center_y, 720);
+                    
+                    // Print what would be sent to Arduino
+                    printf("SERVO COMMAND: %d,%d\n", pan_angle, tilt_angle);
+                    send_arduino_command_throttled(pan_angle, tilt_angle);
                 }
             }
             free_detection_result(result);
@@ -114,3 +128,6 @@ void process_metadata(char *metadata_text, size_t size) {
         g_free(null_terminated);
     }
 }
+
+
+
