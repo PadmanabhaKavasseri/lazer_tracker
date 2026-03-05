@@ -17,6 +17,7 @@ extern int arduino_fd;
 int map_to_servo_angle(float normalized_coord, int image_dimension);
 int init_arduino_serial(void);
 void send_arduino_command(int pan_angle, int tilt_angle);
+void send_arduino_command_binary(int pan_angle, int tilt_angle);
 void send_arduino_command_throttled(int pan_angle, int tilt_angle);
 void cleanup_arduino_serial(void);
 

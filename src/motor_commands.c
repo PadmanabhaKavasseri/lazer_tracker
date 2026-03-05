@@ -25,10 +25,10 @@ int map_to_servo_angle(float normalized_coord, int image_dimension) {
 
 int init_arduino_serial(void) {
     // Configure serial port
-    system("stty -F /dev/ttyACM0 9600 raw -echo");
+    system("stty -F /dev/ttyACM0 115200 raw -echo");
     
     // Open serial port for writing
-    arduino_fd = open(ARDUINO_PORT, O_WRONLY | O_NOCTTY);
+    arduino_fd = open(ARDUINO_PORT, O_WRONLY | O_NOCTTY | O_NONBLOCK);
     if (arduino_fd < 0) {
         g_printerr("Failed to open Arduino serial port: %s\n", ARDUINO_PORT);
         return -1;
@@ -52,6 +52,20 @@ void send_arduino_command(int pan_angle, int tilt_angle) {
         printf("Sent to Arduino: %s", command);
     }
 }
+
+void send_arduino_command_binary(int pan_angle, int tilt_angle) {
+    if (arduino_fd < 0) return;
+    
+    // Send 3 bytes: [0xFF][pan][tilt]
+    unsigned char command[3] = {
+        0xFF,                           // Start marker
+        (unsigned char)pan_angle,       // Pan (45-135 fits in 1 byte)
+        (unsigned char)tilt_angle       // Tilt (45-135 fits in 1 byte)
+    };
+    
+    write(arduino_fd, command, 3);
+}
+
 
 void send_arduino_command_throttled(int pan_angle, int tilt_angle) {
     struct timespec current_time;

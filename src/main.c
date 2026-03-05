@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
         "qtimlvconverter name=preproc "
         "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite "
         "qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings=\"{\\\"confidence\\\": 70.0}\" "
-        "filesrc location=/home/ubuntu/testVideos/Draw_720p_180s_30FPS.mp4 ! qtdemux ! queue ! h264parse ! v4l2h264dec capture-io-mode=4 output-io-mode=4 ! video/x-raw,format=NV12 ! queue ! tee name=split "
+        "qtiqmmfsrc camera=0 ! video/x-raw,format=NV12  ! qtivtransform flip-vertical=true ! queue ! tee name=split "
         "split. ! qtimetamux name=metamux ! tee name=meta_tee "
         "meta_tee. ! queue ! qtivoverlay ! autovideosink "
         "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
@@ -44,13 +44,13 @@ int main(int argc, char *argv[]) {
         NULL);
 
     
-    if (!pipeline) {
+    if (!CSI_pipeline) {
         g_printerr("Failed to create pipeline\n");
         return -1;
     }
     
     // Find and configure appsink
-    metadata_sink = gst_bin_get_by_name(GST_BIN(pipeline), "metadata_sink");
+    metadata_sink = gst_bin_get_by_name(GST_BIN(CSI_pipeline), "metadata_sink");
     if (!metadata_sink) {
         g_printerr("Failed to find metadata_sink element\n");
         return -1;
@@ -59,15 +59,15 @@ int main(int argc, char *argv[]) {
     g_signal_connect(metadata_sink, "new-sample", G_CALLBACK(on_new_metadata_sample), NULL);
     
     // Start pipeline
-    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    gst_element_set_state(CSI_pipeline, GST_STATE_PLAYING);
     
     // Run main loop
     loop = g_main_loop_new(NULL, FALSE);
     g_main_loop_run(loop);
     
     // Cleanup
-    gst_element_set_state(pipeline, GST_STATE_NULL);
-    gst_object_unref(pipeline);
+    gst_element_set_state(CSI_pipeline, GST_STATE_NULL);
+    gst_object_unref(CSI_pipeline);
     g_main_loop_unref(loop);
     cleanup_arduino_serial();
     
@@ -120,7 +120,7 @@ void process_metadata(char *metadata_text, size_t size) {
                     
                     // Print what would be sent to Arduino
                     printf("SERVO COMMAND: %d,%d\n", pan_angle, tilt_angle);
-                    send_arduino_command_throttled(pan_angle, tilt_angle);
+                    send_arduino_command_binary(pan_angle, tilt_angle);
                 }
             }
             free_detection_result(result);

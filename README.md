@@ -10,7 +10,7 @@ make
 
 ## Compile Arduino Code
 ```
-cd /home/ubuntu/lazer_tracker/ard
+cd /home/ubuntu/lazer_tracker/servo_controller
 arduino-cli compile --fqbn arduino:avr:uno servo_controller.ino
 ```
 
@@ -22,7 +22,7 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno servo_controller.ino
 
 ## Arduino Test Commands
 ```
-/ → stty -F /dev/ttyACM0 9600 raw -echo
+/ → stty -F /dev/ttyACM0 115200 raw -echo
 / → printf "45,45\n" > /dev/ttyACM0
 / → printf "135,135\n" > /dev/ttyACM0
 / → printf "90,90\n" > /dev/ttyACM0
@@ -72,6 +72,19 @@ qtimlvconverter name=preproc \
 qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options="QNNExternalDelegate,backend_type=htp;" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite \
 qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings="{\"confidence\": 70.0}" \
 qtiqmmfsrc camera=0 ! video/x-raw,format=NV12 ! queue ! tee name=split \
+split. ! qtimetamux name=metamux ! qtivoverlay ! autovideosink \
+split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.
+
+```
+
+## CSI Cam to object detection IMDSK Rotate upside down
+
+```
+gst-launch-1.0 -e  \
+qtimlvconverter name=preproc \
+qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options="QNNExternalDelegate,backend_type=htp;" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite \
+qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings="{\"confidence\": 70.0}" \
+qtiqmmfsrc camera=0 ! video/x-raw,format=NV12  ! qtivtransform flip-vertical=true ! queue ! tee name=split \
 split. ! qtimetamux name=metamux ! qtivoverlay ! autovideosink \
 split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.
 
