@@ -22,13 +22,7 @@ arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno servo_controller.ino
 
 ## Arduino Test Commands
 ```
-/ → stty -F /dev/ttyACM0 115200 raw -echo
-/ → printf "45,45\n" > /dev/ttyACM0
-/ → printf "135,135\n" > /dev/ttyACM0
-/ → printf "90,90\n" > /dev/ttyACM0
-/ → printf "60,120\n" > /dev/ttyACM0
 
-cat /dev/ttyACM0
 ```
 
 
@@ -42,6 +36,49 @@ v4l2-ctl --list-devices
 gst-launch-1.0 v4l2src device=/dev/video0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! autovideosink
 
 ```
+
+## CSI Cam to HDMI 
+```
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! autovideosink
+
+```
+
+## CSI Cam ROTATE  to HDMI 
+```
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! autovideosink
+
+```
+
+--no magenta--
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! videoconvert ! videobalance saturation=3.0 contrast=1.5 ! autovideosink
+
+--can see--
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! videoconvert ! videobalance saturation=1.2 contrast=1.1 ! autovideosink
+
+--cant see---
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! videoconvert ! videobalance saturation=2.0 contrast=1.3 hue=0.8 ! autovideosink
+
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! videoconvert ! videobalance saturation=-2.0 contrast=0 hue=0.8 ! autovideosink
+
+
+
+
+
+
+--works well--
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! videoconvert ! videobalance brightness=-1 saturation=2.0 contrast=1.4 ! autovideosink
+
+
+
+gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! qtivtransform flip-vertical=true ! videoconvert ! videobalance brightness=-1.0 saturation=1.9 contrast=2.0 ! waylandsink fullscreen=true
+
+
+
+export XDG_RUNTIME_DIR=/dev/socket/weston && mkdir -p $XDG_RUNTIME_DIR && weston --continue-without-input --idle-time=0 --backend=drm-backend.so --xwayland &
+
+
+
+
 
 ## Run
 
@@ -82,7 +119,7 @@ split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! pos
 ```
 gst-launch-1.0 -e  \
 qtimlvconverter name=preproc \
-qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options="QNNExternalDelegate,backend_type=htp;" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite \
+qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options="QNNExternalDelegate,backend_type=htp;" model=/home/ubuntu/TFLite/yolov5s-320x320-int8.tflite \
 qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings="{\"confidence\": 70.0}" \
 qtiqmmfsrc camera=0 ! video/x-raw,format=NV12  ! qtivtransform flip-vertical=true ! queue ! tee name=split \
 split. ! qtimetamux name=metamux ! qtivoverlay ! autovideosink \
@@ -101,14 +138,33 @@ GST_DEBUG="identity:5" gst-launch-1.0 v4l2src device=/dev/video2 ! "video/x-raw,
 GST_DEBUG="identity:5" gst-launch-1.0 qtiqmmfsrc camera=0 ! "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! identity name=timing-start ! fpsdisplaysink video-sink=autovideosink text-overlay=true
 ```
 
+## CSI Cam to EI object detection IMDSK Rotate upside down
 
+```
+gst-launch-1.0 -e  \
+qtimlvconverter name=preproc \
+qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options="QNNExternalDelegate,backend_type=htp;" model=/home/ubuntu/TFLite/laser1.lite \
+qtimlpostprocess name=postproc results=1 module=yolov5 labels=/home/ubuntu/TFLite/laser.json settings="{\"confidence\": 80.0}" \
+qtiqmmfsrc camera=0 ! video/x-raw,format=NV12  ! qtivtransform flip-vertical=true ! queue ! tee name=split \
+split. ! qtimetamux name=metamux ! qtivoverlay ! autovideosink \
+split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.
 
+```
 
+OG EI
+gst-launch-1.0 -e qtiqmmfsrc camera=0 ! video/x-raw,format=NV12 ! videoconvert ! video/x-raw,format=RGB ! edgeimpulsevideoinfer_931270-lazertarget-ei threshold="6.minScore=0.5" ! edgeimpulseoverlay_931270-lazertarget-ei ! videoconvert ! autovideosink
 
+With videobalance
 
-
-
-
+gst-launch-1.0 -e qtiqmmfsrc camera=0 ! \
+    video/x-raw,format=NV12 ! \
+    videoconvert ! \
+    videobalance brightness=-1.0 saturation=1.9 contrast=2.0 ! \
+    video/x-raw,format=RGB ! \
+    edgeimpulsevideoinfer_931270-lazertarget-ei threshold="6.minScore=0.5" ! \
+    edgeimpulseoverlay_931270-lazertarget-ei ! \
+    videoconvert ! \
+    autovideosink
 
 
 
@@ -161,3 +217,24 @@ model=/home/ubuntu/TFLite/mobilenet_v2_1.0_224_quant.tflite
 
 
 qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options="QNNExternalDelegate,backend_type=htp;" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite
+
+
+
+### Training Pipeline
+```
+rm -rf training_images && mkdir training_images
+
+
+gst-launch-1.0 qtiqmmfsrc camera=0 ! \
+    "video/x-raw,format=NV12,width=1280,height=720,framerate=30/1" ! \
+    qtivtransform flip-vertical=true flip-horizontal=true ! \
+    videoconvert ! \
+    videobalance brightness=-1.0 saturation=1.0 contrast=1.5 ! \
+    videorate ! \
+    "video/x-raw,framerate=1/1" ! \
+    pngenc ! \
+    multifilesink location="training_images/img_%04d.png"
+
+
+
+```

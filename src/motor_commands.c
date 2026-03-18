@@ -12,13 +12,12 @@ int map_to_servo_angle(float normalized_coord, int image_dimension) {
     // Convert normalized coordinate (0.0-1.0) to pixel coordinate
     float pixel_coord = normalized_coord * image_dimension;
     
-    // Map pixel coordinate to servo angle (45°-135° range)
-    // 0 pixels → 45°, max pixels → 135°, center → 90°
-    int servo_angle = 45 + (int)((pixel_coord / image_dimension) * 90);
+    // Use wider range: 20°-150° (120° span instead of 90°)
+    int servo_angle = 10 + (int)((pixel_coord / image_dimension) * 160);
     
     // Constrain to safe servo range
-    if (servo_angle < 45) servo_angle = 45;
-    if (servo_angle > 135) servo_angle = 135;
+    if (servo_angle < 10) servo_angle = 10;
+    if (servo_angle > 170) servo_angle = 170;
     
     return servo_angle;
 }

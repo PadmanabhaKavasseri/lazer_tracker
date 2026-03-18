@@ -2,10 +2,77 @@
 #include "motor_commands.h"
 #include <gst/app/gstappsink.h>
 #include <stdio.h>
+#include <sys/time.h>
+
+#define LASER_PAN_OFFSET    3    // Horizontal offset in degrees (-10 to +10)
+#define LASER_TILT_OFFSET   -3   // Vertical offset in degrees (negative = higher)
+#define LASER_MIN_ANGLE     0   // Minimum servo angle
+#define LASER_MAX_ANGLE     180  // Maximum servo angle
+
+typedef struct {
+    GstClockTime last_buffer_pts;
+    const char* stage_name;
+} TimingData;
 
 // Function declarations
 static GstFlowReturn on_new_metadata_sample(GstElement *sink, gpointer user_data);
 void process_metadata(char *metadata_text, size_t size);
+
+static GstPadProbeReturn timing_probe_callback(GstPad *pad, GstPadProbeInfo *info, gpointer user_data) {
+    TimingData *timing = (TimingData*)user_data;
+    GstBuffer *buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+    
+    // Use buffer PTS to track the same buffer through pipeline
+    GstClockTime pts = GST_BUFFER_PTS(buffer);
+    
+    if (GST_CLOCK_TIME_IS_VALID(pts) && timing->last_buffer_pts != GST_CLOCK_TIME_NONE) {
+        // Calculate time since this buffer was at the previous stage
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        static struct timeval stage_times[4] = {0}; // decode, preproc, inference, postproc
+        static int stage_index = 0;
+        
+        if (strcmp(timing->stage_name, "DECODE") == 0) stage_index = 0;
+        else if (strcmp(timing->stage_name, "PREPROC") == 0) stage_index = 1;
+        else if (strcmp(timing->stage_name, "INFERENCE") == 0) stage_index = 2;
+        else if (strcmp(timing->stage_name, "POSTPROC") == 0) stage_index = 3;
+        
+        if (stage_index > 0 && stage_times[stage_index-1].tv_sec != 0) {
+            long diff_ms = (now.tv_sec - stage_times[stage_index-1].tv_sec) * 1000 + 
+                          (now.tv_usec - stage_times[stage_index-1].tv_usec) / 1000;
+            printf("[TIMING] %s processing: %ld ms\n", timing->stage_name, diff_ms);
+        }
+        
+        stage_times[stage_index] = now;
+    }
+    
+    timing->last_buffer_pts = pts;
+    return GST_PAD_PROBE_OK;
+}
+
+// Add to your main() after pipeline creation:
+void add_timing_probes(GstElement *pipeline) {
+    GstElement *preproc = gst_bin_get_by_name(GST_BIN(pipeline), "preproc");
+    GstElement *inference = gst_bin_get_by_name(GST_BIN(pipeline), "inference");
+    GstElement *postproc = gst_bin_get_by_name(GST_BIN(pipeline), "postproc");
+    
+    // Create timing data structures
+    static TimingData decode_timing = {.stage_name = "DECODE"};
+    static TimingData preproc_timing = {.stage_name = "PREPROC"};
+    static TimingData inference_timing = {.stage_name = "INFERENCE"};
+    static TimingData postproc_timing = {.stage_name = "POSTPROC"};
+    
+    // Add probes
+    GstPad *preproc_sink = gst_element_get_static_pad(preproc, "sink");
+    GstPad *preproc_src = gst_element_get_static_pad(preproc, "src");
+    GstPad *inference_src = gst_element_get_static_pad(inference, "src");
+    GstPad *postproc_src = gst_element_get_static_pad(postproc, "src");
+    
+    gst_pad_add_probe(preproc_sink, GST_PAD_PROBE_TYPE_BUFFER, timing_probe_callback, &decode_timing, NULL);
+    gst_pad_add_probe(preproc_src, GST_PAD_PROBE_TYPE_BUFFER, timing_probe_callback, &preproc_timing, NULL);
+    gst_pad_add_probe(inference_src, GST_PAD_PROBE_TYPE_BUFFER, timing_probe_callback, &inference_timing, NULL);
+    gst_pad_add_probe(postproc_src, GST_PAD_PROBE_TYPE_BUFFER, timing_probe_callback, &postproc_timing, NULL);
+}
 
 
 int main(int argc, char *argv[]) {
@@ -57,6 +124,8 @@ int main(int argc, char *argv[]) {
     }
     
     g_signal_connect(metadata_sink, "new-sample", G_CALLBACK(on_new_metadata_sample), NULL);
+
+    add_timing_probes(CSI_pipeline);
     
     // Start pipeline
     gst_element_set_state(CSI_pipeline, GST_STATE_PLAYING);
@@ -113,10 +182,14 @@ void process_metadata(char *metadata_text, size_t size) {
                     // Calculate center coordinates
                     float center_x = det->x + (det->width / 2.0);
                     float center_y = det->y + (det->height / 2.0);
-                    
+
+                    // center_x = 1.0 - center_x;  // Since coordinates are normalized 0.0-1.0
+                    center_y = 1.0 - center_y;
+
                     // Map to servo angles
-                    int pan_angle = map_to_servo_angle(center_x, 1280);
-                    int tilt_angle = map_to_servo_angle(center_y, 720);
+                    int pan_angle = map_to_servo_angle(center_x, 1280) + LASER_PAN_OFFSET;
+                    int tilt_angle = map_to_servo_angle(center_y, 720) + LASER_TILT_OFFSET;
+
                     
                     // Print what would be sent to Arduino
                     printf("SERVO COMMAND: %d,%d\n", pan_angle, tilt_angle);

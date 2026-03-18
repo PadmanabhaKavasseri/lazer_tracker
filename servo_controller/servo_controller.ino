@@ -5,8 +5,8 @@ Servo tiltServo;  // Pin 10 - vertical movement
 
 const long SERIAL_BAUD_RATE = 115200;
 // Servo angle limits (adjust as needed)
-const int MIN_ANGLE = 45;
-const int MAX_ANGLE = 135;
+const int MIN_ANGLE = 0;
+const int MAX_ANGLE = 180;
 const int CENTER_ANGLE = 90;
 
 void setup() {
