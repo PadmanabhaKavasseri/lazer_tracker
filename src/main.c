@@ -4,10 +4,12 @@
 #include <stdio.h>
 #include <sys/time.h>
 
-#define LASER_PAN_OFFSET    3    // Horizontal offset in degrees (-10 to +10)
-#define LASER_TILT_OFFSET   -3   // Vertical offset in degrees (negative = higher)
+#define LASER_PAN_OFFSET    0    // Horizontal offset in degrees (-10 to +10)
+#define LASER_TILT_OFFSET   0   // Vertical offset in degrees (negative = higher)
 #define LASER_MIN_ANGLE     0   // Minimum servo angle
 #define LASER_MAX_ANGLE     180  // Maximum servo angle
+// #define BOT_MIN_MAX 125 - 61
+// #define TOP_MIN_MAX 83 - 125
 
 typedef struct {
     GstClockTime last_buffer_pts;
@@ -77,6 +79,8 @@ void add_timing_probes(GstElement *pipeline) {
 
 int main(int argc, char *argv[]) {
     GstElement *pipeline;
+    GstElement *CSI_pipeline;
+    GstElement *target_pipe;
     GstElement *metadata_sink;
     GMainLoop *loop;
 
@@ -87,8 +91,22 @@ int main(int argc, char *argv[]) {
     // Initialize GStreamer
     gst_init(&argc, &argv);
     
+    
     // Create pipeline
-    GstElement * CSI_pipeline = gst_parse_launch(
+
+    target_pipe = gst_parse_launch(
+        "qtimlvconverter name=preproc "
+        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/laser1.lite "
+        "qtimlpostprocess name=postproc results=1 module=yolov5 labels=/home/ubuntu/TFLite/laser.json settings=\"{\\\"confidence\\\": 50.0}\" "
+        "qtiqmmfsrc camera=0 ! video/x-raw,format=NV12 ! qtivtransform flip-vertical=true flip-horizontal=true ! videoconvert ! videobalance brightness=-1.0 saturation=1.9 contrast=2.0 ! videoconvert ! queue ! tee name=split "
+        "split. ! qtimetamux name=metamux ! tee name=meta_tee "
+        "meta_tee. ! queue ! qtivoverlay ! autovideosink "
+        "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
+        "split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.",
+        NULL);
+
+
+    CSI_pipeline = gst_parse_launch(
         "qtimlvconverter name=preproc "
         "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite "
         "qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings=\"{\\\"confidence\\\": 70.0}\" "
@@ -111,13 +129,13 @@ int main(int argc, char *argv[]) {
         NULL);
 
     
-    if (!CSI_pipeline) {
+    if (!target_pipe) {
         g_printerr("Failed to create pipeline\n");
         return -1;
     }
     
     // Find and configure appsink
-    metadata_sink = gst_bin_get_by_name(GST_BIN(CSI_pipeline), "metadata_sink");
+    metadata_sink = gst_bin_get_by_name(GST_BIN(target_pipe), "metadata_sink");
     if (!metadata_sink) {
         g_printerr("Failed to find metadata_sink element\n");
         return -1;
@@ -125,18 +143,18 @@ int main(int argc, char *argv[]) {
     
     g_signal_connect(metadata_sink, "new-sample", G_CALLBACK(on_new_metadata_sample), NULL);
 
-    add_timing_probes(CSI_pipeline);
+    add_timing_probes(target_pipe);
     
     // Start pipeline
-    gst_element_set_state(CSI_pipeline, GST_STATE_PLAYING);
+    gst_element_set_state(target_pipe, GST_STATE_PLAYING);
     
     // Run main loop
     loop = g_main_loop_new(NULL, FALSE);
     g_main_loop_run(loop);
     
     // Cleanup
-    gst_element_set_state(CSI_pipeline, GST_STATE_NULL);
-    gst_object_unref(CSI_pipeline);
+    gst_element_set_state(target_pipe, GST_STATE_NULL);
+    gst_object_unref(target_pipe);
     g_main_loop_unref(loop);
     cleanup_arduino_serial();
     
@@ -176,14 +194,15 @@ void process_metadata(char *metadata_text, size_t size) {
                 ObjectDetection *det = &result->detections[i];
                 
                 // Filter for stop signs with high confidence
-                if (is_high_confidence_detection(det, 70.0) && 
-                    strcmp(det->class_name, "stop.sign") == 0) {
+                if (is_high_confidence_detection(det, 50.0) && 
+                    strcmp(det->class_name, "target") == 0) {
                     
                     // Calculate center coordinates
                     float center_x = det->x + (det->width / 2.0);
                     float center_y = det->y + (det->height / 2.0);
-
-                    // center_x = 1.0 - center_x;  // Since coordinates are normalized 0.0-1.0
+                    
+                    // COMPENSATE FOR BOTH FLIPS
+                    center_x = 1.0 - center_x;  // Since coordinates are normalized 0.0-1.0
                     center_y = 1.0 - center_y;
 
                     // Map to servo angles

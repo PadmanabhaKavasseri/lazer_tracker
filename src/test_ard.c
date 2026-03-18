@@ -67,7 +67,7 @@ int main() {
     
     printf("Arduino Motor Control\n");
     printf("Commands: b45 (bottom motor), t90 (top motor), q (quit)\n");
-    printf("Angle range: 45-135\n\n");
+    printf("Angle range: 0-180\n\n");
     
     while (1) {
         printf("> ");
@@ -87,10 +87,10 @@ int main() {
         
         // Parse input: b45, t90, etc.
         if (sscanf(input, "%c%d", &motor, &angle) == 2) {
-            if (angle >= 45 && angle <= 135) {
+            if (angle >= 0 && angle <= 180) {
                 send_motor_command(motor, angle);
             } else {
-                printf("Angle must be between 45 and 135\n");
+                printf("Angle must be between 0 and 180\n");
             }
         } else {
             printf("Invalid format. Use: b45 or t90\n");
