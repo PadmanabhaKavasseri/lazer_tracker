@@ -34,27 +34,34 @@ int init_arduino() {
 void send_motor_command(char motor, int angle) {
     if (arduino_fd < 0) return;
     
-    // Send command based on motor type
+    // Static variables to remember last positions
+    static int last_pan = 90;   // Default starting position
+    static int last_tilt = 90;  // Default starting position
+    
     unsigned char command[3];
     
     if (motor == 'b') {
-        // Bottom motor (pan) - send as pan, keep tilt unchanged (90)
+        // Bottom motor (pan) - update pan, keep last tilt
+        last_pan = angle;
         command[0] = 0xFF;
-        command[1] = (unsigned char)angle;  // pan
-        command[2] = 90;                    // tilt (default)
+        command[1] = (unsigned char)last_pan;
+        command[2] = (unsigned char)last_tilt;  // Use stored tilt value
     } else if (motor == 't') {
-        // Top motor (tilt) - send as tilt, keep pan unchanged (90)
+        // Top motor (tilt) - update tilt, keep last pan  
+        last_tilt = angle;
         command[0] = 0xFF;
-        command[1] = 90;                    // pan (default)
-        command[2] = (unsigned char)angle;  // tilt
+        command[1] = (unsigned char)last_pan;   // Use stored pan value
+        command[2] = (unsigned char)last_tilt;
     } else {
         printf("Invalid motor. Use 'b' for bottom or 't' for top\n");
         return;
     }
     
     write(arduino_fd, command, 3);
-    printf("Sent: %c%d -> [0xFF] [%d] [%d]\n", motor, angle, command[1], command[2]);
+    printf("Sent: %c%d -> [0xFF] [%d] [%d] (Pan: %d, Tilt: %d)\n", 
+           motor, angle, command[1], command[2], last_pan, last_tilt);
 }
+
 
 int main() {
     char input[100];

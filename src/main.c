@@ -4,12 +4,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 
-#define LASER_PAN_OFFSET    0    // Horizontal offset in degrees (-10 to +10)
-#define LASER_TILT_OFFSET   0   // Vertical offset in degrees (negative = higher)
-#define LASER_MIN_ANGLE     0   // Minimum servo angle
-#define LASER_MAX_ANGLE     180  // Maximum servo angle
-// #define BOT_MIN_MAX 125 - 61
-// #define TOP_MIN_MAX 83 - 125
+
 
 typedef struct {
     GstClockTime last_buffer_pts;
@@ -96,8 +91,8 @@ int main(int argc, char *argv[]) {
 
     target_pipe = gst_parse_launch(
         "qtimlvconverter name=preproc "
-        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/laser1.lite "
-        "qtimlpostprocess name=postproc results=1 module=yolov5 labels=/home/ubuntu/TFLite/laser.json settings=\"{\\\"confidence\\\": 50.0}\" "
+        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/laser2.lite "
+        "qtimlpostprocess name=postproc results=1 module=yolov5 labels=/home/ubuntu/TFLite/laser.json settings=\"{\\\"confidence\\\": 90.0}\" "
         "qtiqmmfsrc camera=0 ! video/x-raw,format=NV12 ! qtivtransform flip-vertical=true flip-horizontal=true ! videoconvert ! videobalance brightness=-1.0 saturation=1.9 contrast=2.0 ! videoconvert ! queue ! tee name=split "
         "split. ! qtimetamux name=metamux ! tee name=meta_tee "
         "meta_tee. ! queue ! qtivoverlay ! autovideosink "
@@ -194,7 +189,7 @@ void process_metadata(char *metadata_text, size_t size) {
                 ObjectDetection *det = &result->detections[i];
                 
                 // Filter for stop signs with high confidence
-                if (is_high_confidence_detection(det, 50.0) && 
+                if (is_high_confidence_detection(det, 90.0) && 
                     strcmp(det->class_name, "target") == 0) {
                     
                     // Calculate center coordinates
@@ -202,12 +197,21 @@ void process_metadata(char *metadata_text, size_t size) {
                     float center_y = det->y + (det->height / 2.0);
                     
                     // COMPENSATE FOR BOTH FLIPS
-                    center_x = 1.0 - center_x;  // Since coordinates are normalized 0.0-1.0
+                    // center_x = 1.0 - center_x;  // Since coordinates are normalized 0.0-1.0
                     center_y = 1.0 - center_y;
 
-                    // Map to servo angles
-                    int pan_angle = map_to_servo_angle(center_x, 1280) + LASER_PAN_OFFSET;
-                    int tilt_angle = map_to_servo_angle(center_y, 720) + LASER_TILT_OFFSET;
+                    // Map to servo angles using custom functions
+                    int pan_angle = map_to_pan_angle(center_x) + LASER_PAN_OFFSET;
+                    int tilt_angle = map_to_tilt_angle(center_y) + LASER_TILT_OFFSET;
+
+                    // Clamp final values to absolute bounds
+                    // if (pan_angle > LASER_PAN_LEFT) pan_angle = LASER_PAN_LEFT;
+                    // if (pan_angle < LASER_PAN_RIGHT) pan_angle = LASER_PAN_RIGHT;
+                    // if (tilt_angle > LASER_TILT_TOP) tilt_angle = LASER_TILT_TOP;
+                    // if (tilt_angle < LASER_TILT_BOTTOM) tilt_angle = LASER_TILT_BOTTOM;
+
+                    apply_calibration_correction(center_x, center_y, &pan_angle, &tilt_angle);
+
 
                     
                     // Print what would be sent to Arduino

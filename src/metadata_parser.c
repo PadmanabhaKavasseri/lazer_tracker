@@ -133,7 +133,7 @@ void print_detection_result(const DetectionResult *result) {
     } else {
         for (guint i = 0; i < result->num_detections; i++) {
             const ObjectDetection *det = &result->detections[i];
-            printf("  [%u] %s: %.1f%% at (%.3f,%.3f,%.3f,%.3f)\n",
+            printf("  [%u] %s: %.1f%% at (%.6f,%.6f,%.6f,%.6f)\n",
                    det->id, det->class_name ? det->class_name : "unknown", 
                    det->confidence, det->x, det->y, det->width, det->height);
             
@@ -179,3 +179,4 @@ void convert_to_pixel_coordinates(const ObjectDetection *detection,
 gboolean is_high_confidence_detection(const ObjectDetection *detection, gdouble threshold) {
     return detection->confidence >= threshold;
 }
+

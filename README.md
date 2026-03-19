@@ -170,3 +170,22 @@ gst-launch-1.0 qtiqmmfsrc camera=0 ! \
 
 
 ```
+
+
+
+## 
+When the target is at the top left:
+(0.135937,0.133333,0.126563,0.168750) was SERVO COMMAND: 115,119
+the servo command it should send out is (Pan: 121, Tilt: 123)
+
+When the target is top right:
+(0.685938,0.133333,0.126563,0.168750) was SERVO COMMAND: 80,119
+it should send out (Pan: 70, Tilt: 123)
+
+When the target is bottom left:
+(0.154687,0.475000,0.126563,0.168750) was SERVO COMMAND: 114,105
+it should send out (Pan: 120, Tilt: 100)
+
+When the target is bottom right:
+(0.721875,0.475000,0.126563,0.168750) was SERVO COMMAND: 77,105
+it should send out (Pan: 67, Tilt: 98)
