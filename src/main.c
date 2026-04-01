@@ -3,6 +3,8 @@
 #include <gst/app/gstappsink.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <getopt.h>
+#include <string.h>
 
 
 
@@ -14,6 +16,47 @@ typedef struct {
 // Function declarations
 static GstFlowReturn on_new_metadata_sample(GstElement *sink, gpointer user_data);
 void process_metadata(char *metadata_text, size_t size);
+
+static void print_usage(const char *program_name) {
+    printf("Usage: %s [OPTIONS]\n", program_name);
+    printf("Options:\n");
+    printf("  -m, --model PATH    Path to the TFLite model file\n");
+    printf("                      (default: /home/ubuntu/TFLite/laser_96_large.lite)\n");
+    printf("  -h, --help          Show this help message\n");
+}
+
+static gchar* parse_model_path(int argc, char *argv[]) {
+    int opt;
+    gchar *model_path = NULL;
+    
+    static struct option long_options[] = {
+        {"model", required_argument, 0, 'm'},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+
+    while ((opt = getopt_long(argc, argv, "m:h", long_options, NULL)) != -1) {
+        switch (opt) {
+            case 'm':
+                model_path = g_strdup(optarg);  // Use g_strdup instead of strdup
+                break;
+            case 'h':
+                print_usage(argv[0]);
+                exit(0);
+                break;
+            default:
+                print_usage(argv[0]);
+                exit(1);
+                break;
+        }
+    }
+
+    if (!model_path) {
+        model_path = g_strdup("/home/ubuntu/TFLite/laser_96_large.lite");  // Use g_strdup
+    }
+
+    return model_path;
+}
 
 static GstPadProbeReturn timing_probe_callback(GstPad *pad, GstPadProbeInfo *info, gpointer user_data) {
     TimingData *timing = (TimingData*)user_data;
@@ -72,16 +115,20 @@ void add_timing_probes(GstElement *pipeline) {
 }
 
 
-int main(int argc, char *argv[]) {
-    GstElement *pipeline;
-    GstElement *CSI_pipeline;
+int mainnnn(int argc, char *argv[]) {
     GstElement *target_pipe;
     GstElement *metadata_sink;
     GMainLoop *loop;
+    gchar *model_path = NULL;
+    gchar *pipeline_str = NULL; 
+
 
     if (init_arduino_serial() != 0) {
         return -1;
     }
+
+    // Parse command line arguments
+    model_path = parse_model_path(argc, argv);
             
     // Initialize GStreamer
     gst_init(&argc, &argv);
@@ -91,32 +138,9 @@ int main(int argc, char *argv[]) {
 
     target_pipe = gst_parse_launch(
         "qtimlvconverter name=preproc "
-        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/laser2.lite "
+        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/laser_96_large.lite "
         "qtimlpostprocess name=postproc results=1 module=yolov5 labels=/home/ubuntu/TFLite/laser.json settings=\"{\\\"confidence\\\": 90.0}\" "
         "qtiqmmfsrc camera=0 ! video/x-raw,format=NV12 ! qtivtransform flip-vertical=true flip-horizontal=true ! videoconvert ! videobalance brightness=-1.0 saturation=1.9 contrast=2.0 ! videoconvert ! queue ! tee name=split "
-        "split. ! qtimetamux name=metamux ! tee name=meta_tee "
-        "meta_tee. ! queue ! qtivoverlay ! autovideosink "
-        "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
-        "split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.",
-        NULL);
-
-
-    CSI_pipeline = gst_parse_launch(
-        "qtimlvconverter name=preproc "
-        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite "
-        "qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings=\"{\\\"confidence\\\": 70.0}\" "
-        "qtiqmmfsrc camera=0 ! video/x-raw,format=NV12  ! qtivtransform flip-vertical=true ! queue ! tee name=split "
-        "split. ! qtimetamux name=metamux ! tee name=meta_tee "
-        "meta_tee. ! queue ! qtivoverlay ! autovideosink "
-        "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
-        "split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.",
-        NULL);
-
-    pipeline = gst_parse_launch(
-        "qtimlvconverter name=preproc "
-        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=/home/ubuntu/TFLite/yolov5m-320x320-int8.tflite "
-        "qtimlpostprocess name=postproc results=5 module=yolov5 labels=/home/ubuntu/TFLite/yolov8.json settings=\"{\\\"confidence\\\": 70.0}\" "
-        "v4l2src device=/dev/video0 ! video/x-raw,format=NV12,width=1280,height=720,framerate=30/1 ! queue ! tee name=split "
         "split. ! qtimetamux name=metamux ! tee name=meta_tee "
         "meta_tee. ! queue ! qtivoverlay ! autovideosink "
         "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
@@ -155,6 +179,84 @@ int main(int argc, char *argv[]) {
     
     return 0;
 }
+
+
+int main(int argc, char *argv[]) {
+    GstElement *target_pipe;
+    GstElement *metadata_sink;
+    GMainLoop *loop;
+    gchar *model_path = NULL;
+    gchar *pipeline_str = NULL; 
+
+    if (init_arduino_serial() != 0) {
+        return -1;
+    }
+
+    // Parse command line arguments
+    model_path = parse_model_path(argc, argv);
+            
+    // Initialize GStreamer
+    gst_init(&argc, &argv);
+    
+    // Create pipeline string with dynamic model path
+    pipeline_str = g_strdup_printf(
+        "qtimlvconverter name=preproc "
+        "qtimltflite name=inference delegate=external external-delegate-path=libQnnTFLiteDelegate.so external-delegate-options=\"QNNExternalDelegate,backend_type=htp;\" model=%s "
+        "qtimlpostprocess name=postproc results=1 module=yolov5 labels=/home/ubuntu/TFLite/laser.json settings=\"{\\\"confidence\\\": 90.0}\" "
+        "qtiqmmfsrc camera=0 ! video/x-raw,format=NV12 ! qtivtransform flip-vertical=true flip-horizontal=true ! videoconvert ! videobalance brightness=-1.0 saturation=1.9 contrast=2.0 ! videoconvert ! queue ! tee name=split "
+        "split. ! qtimetamux name=metamux ! tee name=meta_tee "
+        "meta_tee. ! queue ! qtivoverlay ! autovideosink "
+        "meta_tee. ! queue ! qtimlmetaextractor ! appsink name=metadata_sink emit-signals=true sync=false "
+        "split. ! queue ! preproc. preproc. ! queue ! inference. inference. ! queue ! postproc. postproc. ! text/x-raw ! queue ! metamux.",
+        model_path);
+
+    // Print the pipeline for debugging
+    printf("Pipeline: %s\n", pipeline_str);
+
+    // Use the dynamically created pipeline string
+    target_pipe = gst_parse_launch(pipeline_str, NULL);
+
+    if (!target_pipe) {
+        g_printerr("Failed to create pipeline\n");
+        g_free(model_path);      // Use g_free for both
+        g_free(pipeline_str);
+        return -1;
+    }
+    
+    // Find and configure appsink
+    metadata_sink = gst_bin_get_by_name(GST_BIN(target_pipe), "metadata_sink");
+    if (!metadata_sink) {
+        g_printerr("Failed to find metadata_sink element\n");
+        g_free(model_path);      // Use g_free for both
+        g_free(pipeline_str);
+        gst_object_unref(target_pipe);
+        return -1;
+    }
+    
+    g_signal_connect(metadata_sink, "new-sample", G_CALLBACK(on_new_metadata_sample), NULL);
+
+    add_timing_probes(target_pipe);
+    
+    // Start pipeline
+    gst_element_set_state(target_pipe, GST_STATE_PLAYING);
+    
+    // Run main loop
+    loop = g_main_loop_new(NULL, FALSE);
+    g_main_loop_run(loop);
+    
+    // Cleanup
+    gst_element_set_state(target_pipe, GST_STATE_NULL);
+    gst_object_unref(target_pipe);
+    g_main_loop_unref(loop);
+    cleanup_arduino_serial();
+    
+    // Free allocated memory
+    g_free(model_path);      // Use g_free for both
+    g_free(pipeline_str);
+    
+    return 0;
+}
+
 
 static GstFlowReturn on_new_metadata_sample(GstElement *sink, G_GNUC_UNUSED gpointer user_data) {
     GstSample *sample;
