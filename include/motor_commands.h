@@ -18,7 +18,7 @@
 #define LASER_PAN_LEFT      125  // Leftmost position
 #define LASER_PAN_RIGHT     61   // Rightmost position
 
-// Tilt motor bounds (up/down)  
+// Tilt motor bounds (up/down)
 #define LASER_TILT_BOTTOM   83   // Bottom position
 #define LASER_TILT_TOP      125  // Top position
 
@@ -32,8 +32,9 @@ typedef struct {
 extern const char* ARDUINO_PORT;
 extern int arduino_fd;
 
-// Function declarations
-void apply_calibration_correction(float center_x, float center_y, int *pan_angle, int *tilt_angle);
+
+void apply_calibration_correction(float center_x, float center_y, int *pan_angle,
+    int *tilt_angle);
 int map_to_servo_angle(float normalized_coord, int image_dimension);
 int map_to_tilt_angle(float normalized_y);
 int map_to_pan_angle(float normalized_x);
